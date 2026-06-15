@@ -420,6 +420,19 @@ def format_docx(input_path: str, output_path: str, add_toc: bool = False) -> int
                     rstyle = rpr.find(W("rStyle"))
                     if rstyle is not None:
                         rpr.remove(rstyle)
+            # 脚注段落间距：段前段后0磅
+            for p in fn_root.iter(W("p")):
+                ppr = p.find(W("pPr"))
+                if ppr is None:
+                    ppr = ET.SubElement(p, W("pPr"))
+                    p.insert(0, ppr)
+                for old in ppr.findall(W("spacing")):
+                    ppr.remove(old)
+                sp = ET.SubElement(ppr, W("spacing"))
+                sp.set(W("before"), "0")
+                sp.set(W("after"), "0")
+                sp.set(W("line"), "240")
+                sp.set(W("lineRule"), "auto")
             fn_tree.write(str(fn_path), encoding="utf-8", xml_declaration=True)
             print(f"   脚注字体已统一为宋体小五")
 
