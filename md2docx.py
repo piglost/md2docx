@@ -110,6 +110,75 @@ REF_ENTRY_BRACKET_RE = re.compile(r"^\s*\[(\d+)\]\s*(.*)")
 REF_ENTRY_DOT_RE = re.compile(r"^\s*(\d+)\.\s+(.*)")
 # 参考文献内部的子标题
 REF_SUBHEADING_RE = re.compile(r"^#{1,4}\s+")
+# 圆圈数字脚注标记 ①②③...⑳
+CIRCLED_NUM_RE = re.compile(r"[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]")
+CIRCLED_NUM_MAP = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"
+# 全角方括号数字引用 〔1〕〔2〕
+FULLWIDTH_BRACKET_RE = re.compile(r"〔(\d+)〕")
+
+
+def find_circled_ref_boundary(lines: list[str]) -> int | None:
+    """找到注释 section（①②③ 风格脚注定义所在位置）"""
+    for title in ["注释", "注  释"]:
+        heading_pat = re.compile(rf"^#+\s+{re.escape(title)}\s*$")
+        for i, line in enumerate(lines):
+            if heading_pat.match(line.strip()):
+                return i
+    return None
+
+
+def split_circled_footnotes(lines: list[str]) -> tuple[list[str], dict[str, str]]:
+    """将文档分成正文和圆圈数字注释部分。
+    返回：(正文行, {数字str: 注释内容})
+    """
+    boundary = find_circled_ref_boundary(lines)
+    if boundary is None:
+        return lines, {}
+
+    body = lines[:boundary]
+    ref_lines = lines[boundary + 1:]
+    ref_dict = {}
+    current_key = None
+    current_text = []
+
+    for line in ref_lines:
+        stripped = line.strip()
+        # 跳过子标题
+        if REF_SUBHEADING_RE.match(stripped):
+            continue
+        # 匹配 ① 内容 格式
+        m = re.match(r"^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]\s*(.*)", stripped)
+        if m:
+            if current_key is not None and current_text:
+                ref_dict[current_key] = " ".join(current_text).strip()
+            # 从行首提取圆圈数字
+            circled = stripped[0]
+            idx = CIRCLED_NUM_MAP.index(circled) + 1
+            current_key = str(idx)
+            current_text = [m.group(1).strip()] if m.group(1).strip() else []
+            continue
+        # 续行
+        if current_key is not None and stripped:
+            current_text.append(stripped)
+
+    if current_key is not None and current_text:
+        ref_dict[current_key] = " ".join(current_text).strip()
+
+    return body, ref_dict
+
+
+def convert_circled_citations(text: str, ref_dict: dict[str, str]) -> str:
+    """将 ①②③ 标记转为 pandoc 脚注 [^N]"""
+    if not ref_dict:
+        return text
+    def replace(match):
+        circled = match.group(0)
+        idx = CIRCLED_NUM_MAP.index(circled) + 1
+        key = str(idx)
+        if key in ref_dict:
+            return f"[^{key}]"
+        return match.group(0)  # 无对应定义则保留原样
+    return CIRCLED_NUM_RE.sub(replace, text)
 
 
 def find_ref_section_boundary(lines: list[str]) -> int | None:
@@ -277,14 +346,49 @@ def preprocess_markdown(input_path: str) -> str:
     lines = content.splitlines()
     body_lines, ref_dict = split_document(lines)
 
+    # 检测是否有 〔1〕 格式的参考文献需要转为脚注
+    if not ref_dict:
+        fullwidth_refs = FULLWIDTH_BRACKET_RE.findall(content)
+        if fullwidth_refs:
+            new_ref_dict = {}
+            new_body = []
+            in_ref_section = False
+            for line in lines:
+                stripped = line.strip()
+                if re.match(r"^#+\s+参考文献", stripped):
+                    in_ref_section = True
+                    continue
+                if in_ref_section:
+                    m = re.match(r"^〔(\d+)〕\s*(.*)", stripped)
+                    if m:
+                        new_ref_dict[m.group(1)] = m.group(2).strip()
+                    continue
+                new_body.append(line)
+            if new_ref_dict:
+                body_lines = []
+                for line in new_body:
+                    body_lines.append(FULLWIDTH_BRACKET_RE.sub(
+                        lambda m: f"[^{m.group(1)}]", line))
+                ref_dict = new_ref_dict
+
+    # 检测正文是否有 ①②③ 标记，优先使用圆圈数字脚注
+    has_circled = any(c in "①②③④⑤⑥⑦⑧⑨⑩" for line in lines for c in line)
+    if has_circled:
+        body_lines, ref_dict = split_circled_footnotes(lines)
+        use_circled = bool(ref_dict)
+    else:
+        use_circled = False
+
     # 处理正文中的引用
     processed_body = []
     for i, line in enumerate(body_lines):
-        # 跳过代码块
-        if is_in_code_block(body_lines, i) or line.strip().startswith("```"):
+        if is_in_code_block(body_lines, i) or line.strip().startswith("``"):
             processed_body.append(line)
             continue
-        processed_body.append(convert_citations_in_text(line, ref_dict))
+        if use_circled:
+            processed_body.append(convert_circled_citations(line, ref_dict))
+        else:
+            processed_body.append(convert_citations_in_text(line, ref_dict))
 
     result = "\n".join(processed_body)
 
@@ -316,7 +420,8 @@ def get_pandoc_cmd(input_md: str, output_docx: str, reference_doc: str | None = 
 
 
 def convert(input_path: str, output_path: str | None = None,
-            reference_doc: str | None = None, add_toc: bool = False) -> str:
+            reference_doc: str | None = None, add_toc: bool = False,
+            format_style: str = "auto") -> str:
     """
     主转换函数。
 
@@ -324,6 +429,7 @@ def convert(input_path: str, output_path: str | None = None,
         input_path: 输入的 .md 文件路径
         output_path: 输出的 .docx 路径（默认：同名 .docx）
         reference_doc: 参考样式模板 .docx（可选）
+        format_style: 排版风格 - "faxue"(中国法学) / "sheke"(中国社会科学) / "auto"(自动检测)
 
     返回：
         输出文件路径
@@ -393,15 +499,38 @@ def convert(input_path: str, output_path: str | None = None,
     else:
         print("ℹ️  跳过颜色后处理（脚本未安装）")
 
-    # ── 后处理：《中国法学》格式（含字体/字号/缩进/对齐）──
-    zgf_format_script = SCRIPT_DIR / "zhongguo-faxue-format.py"
-    if os.path.exists(str(zgf_format_script)):
-        print("📐 后处理：应用《中国法学》格式...")
+    # ── 自动检测排版风格 ──
+    if format_style == "auto":
+        with open(input_abs, "r", encoding="utf-8") as f:
+            raw_content = f.read()
+        has_circled = any(c in "①②③④⑤⑥⑦⑧⑨⑩" for c in raw_content)
+        has_fullwidth = "〔" in raw_content and "〕" in raw_content
+        has_sheke_abstract = bool(re.search(r"摘\s*要\s*[：:]", raw_content))
+        if has_circled or has_fullwidth or has_sheke_abstract:
+            format_style = "sheke"
+            print("🔍 自动检测：《中国社会科学》格式")
+        else:
+            format_style = "faxue"
+            print("🔍 自动检测：《中国法学》格式")
+
+    # ── 后处理：应用期刊格式 ──
+    format_scripts = {
+        "faxue": SCRIPT_DIR / "zhongguo-faxue-format.py",
+        "sheke": SCRIPT_DIR / "zhongguo-sheke-format.py",
+    }
+    format_names = {
+        "faxue": "《中国法学》",
+        "sheke": "《中国社会科学》",
+    }
+    fmt_script = format_scripts.get(format_style, format_scripts["faxue"])
+    fmt_name = format_names.get(format_style, "默认")
+    if os.path.exists(str(fmt_script)):
+        print(f"📐 后处理：应用{fmt_name}格式...")
         import tempfile as tmpmod2
         with tmpmod2.NamedTemporaryFile(suffix=".docx", delete=False) as tmp2:
             zgf_tmp = tmp2.name
         try:
-            zgf_cmd = [sys.executable, str(zgf_format_script), output_abs, zgf_tmp]
+            zgf_cmd = [sys.executable, str(fmt_script), output_abs, zgf_tmp]
             if add_toc:
                 zgf_cmd.append("--toc")
             result3 = subprocess.run(zgf_cmd, capture_output=True, text=True)
@@ -458,6 +587,9 @@ def main():
                         help="仅显示预处理结果，不实际转换")
     parser.add_argument("--toc", action="store_true",
                         help="在标题前插入自动目次（Word 域代码）")
+    parser.add_argument("--format", "-f", choices=["faxue", "sheke", "auto"],
+                        default="auto",
+                        help="排版风格: faxue=中国法学, sheke=中国社会科学, auto=自动检测(默认)")
 
     args = parser.parse_args()
 
@@ -465,7 +597,8 @@ def main():
         processed = preprocess_markdown(args.input)
         print(processed)
     else:
-        convert(args.input, args.output, args.reference_doc, add_toc=args.toc)
+        convert(args.input, args.output, args.reference_doc,
+                add_toc=args.toc, format_style=args.format)
 
 
 if __name__ == "__main__":
