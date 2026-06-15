@@ -5,7 +5,7 @@ zhongguo-faxue-format.py — 《中国法学》格式处理器
 按照《中国法学》投稿格式要求，对 docx 进行精确格式化：
 - 正标题：宋体，二号(22pt)，加粗，居中
 - 作者信息：宋体，小三(15pt)，居中
-- 摘要/关键词标签：黑体，五号(10.5pt)，加粗；内容：宋体，五号，不加粗，顶格
+- 内容提要/关键词：宋体，小四(12pt)，与正文一致
 - 一级标题：黑体，四号(14pt)，居中，不加粗
 - 二级标题：黑体，小四(12pt)，两端对齐，不加粗
 - 三级标题：宋体，小四(12pt)，不加粗
@@ -169,16 +169,21 @@ def insert_toc(body: ET.Element, paragraphs: list) -> None:
         children = list(body)
         insert_pos = children.index(first_h1)
 
-    # ── "目 次" 标题段落 ──
-    toc_heading = ET.Element(W("p"))
-    th_ppr = ET.SubElement(toc_heading, W("pPr"))
-    # 黑体四号居中
-    th_jc = ET.SubElement(th_ppr, W("jc"))
-    th_jc.set(W("val"), "center")
-    th_spacing = ET.SubElement(th_ppr, W("spacing"))
-    th_spacing.set(W("before"), "240")
-    th_spacing.set(W("after"), "120")
-    th_run = ET.SubElement(toc_heading, W("r"))
+    # ── TOC 域代码段落 ──
+    # 域代码：TOC \o "1-3" \h \z \u
+    # \o "1-3" = 收集1-3级标题; \h = 超链接; \z = Web视图隐藏制表符; \u = 用段落大纲级别
+    toc_para = ET.Element(W("p"))
+    toc_ppr = ET.SubElement(toc_para, W("pPr"))
+    # 添加矩形边框（包裹整个目次区域）
+    toc_pbdr = ET.SubElement(toc_ppr, W("pBdr"))
+    for side in ["top", "left", "bottom", "right"]:
+        border_el = ET.SubElement(toc_pbdr, W(side))
+        border_el.set(W("val"), "single")
+        border_el.set(W("sz"), "4")
+        border_el.set(W("space"), "4")
+        border_el.set(W("color"), "000000")
+    # "目 次" 标题作为 TOC 段落的第一个 run（在边框内）
+    th_run = ET.SubElement(toc_para, W("r"))
     th_rpr = ET.SubElement(th_run, W("rPr"))
     th_rf = ET.SubElement(th_rpr, W("rFonts"))
     th_rf.set(W("eastAsia"), HEI_TI)
@@ -187,13 +192,9 @@ def insert_toc(body: ET.Element, paragraphs: list) -> None:
     ET.SubElement(th_rpr, W("sz")).set(W("val"), SIZE["四号"])
     ET.SubElement(th_rpr, W("szCs")).set(W("val"), SIZE["四号"])
     ET.SubElement(th_run, W("t")).text = "目  次"
-    body.insert(insert_pos, toc_heading)
-    insert_pos += 1
-
-    # ── TOC 域代码段落 ──
-    # 域代码：TOC \o "1-3" \h \z \u
-    # \o "1-3" = 收集1-3级标题; \h = 超链接; \z = Web视图隐藏制表符; \u = 用段落大纲级别
-    toc_para = ET.Element(W("p"))
+    # 换行
+    br_run = ET.SubElement(toc_para, W("r"))
+    ET.SubElement(br_run, W("br"))
 
     # fldChar begin
     r1 = ET.SubElement(toc_para, W("r"))
@@ -251,28 +252,16 @@ def classify_paragraph(text: str, is_first: bool) -> str:
     if not text:
         return "empty"
 
-    # 摘要标签（含独立"摘要"）
-    if re.match(r"^(内容提要|内容摘要|摘要)[：:]?\s*$", text):
-        return "abstract-label"
-    if re.match(r"^(内容提要|内容摘要|摘要)[：:]", text):
-        return "abstract-label"
-    if text.strip() in ("摘要", "内容提要", "内容摘要"):
-        return "abstract-label"
-
-    # 关键词标签
-    if re.match(r"^关键词[：:]", text):
-        return "keywords-label"
-
+    # 注意：内容提要/摘要/关键词 不做特殊分类，统一按 body 处理
+    # （PDF原文中这些与正文字体字号一致，均为宋体小四）
     # 一级标题：一、二、三、…
     if re.match(r"^[一二三四五六七八九十]+、", text):
         return "h1"
     # 二级标题：（一）（二）…
     if re.match(r"^（[一二三四五六七八九十]+）", text):
         return "h2"
-    # 三级标题：1. 2. 或 第一，
+    # 三级标题：1. 2. （注意："第一，"是正文枚举标记，不是标题）
     if re.match(r"^\d+[.．、]", text):
-        return "h3"
-    if re.match(r"^第[一二三四五六七八九十]+[，,]", text):
         return "h3"
 
     return "body"
@@ -333,12 +322,6 @@ def format_run(run: ET.Element, para_type: str, label_mode: bool = False):
 
     if para_type == "title":
         set_font(run, SONG_TI, TNR, SIZE["二号"], bold=True)
-    elif para_type == "abstract-label":
-        set_font(run, HEI_TI, TNR, SIZE["五号"], bold=True)
-    elif para_type == "abstract-content":
-        set_font(run, SONG_TI, TNR, SIZE["五号"], bold=False)
-    elif para_type == "keywords-label":
-        set_font(run, HEI_TI, TNR, SIZE["五号"], bold=True)
     elif para_type == "author":
         set_font(run, SONG_TI, TNR, SIZE["小三"], bold=False)
     elif para_type == "h1":
@@ -368,15 +351,6 @@ def format_paragraph(para: ET.Element, para_type: str,
     elif para_type == "author":
         set_paragraph_spacing(ppr, line_spacing="360", after="120",
                               first_line_indent="0", alignment="center")
-    elif para_type == "abstract-label":
-        set_paragraph_spacing(ppr, line_spacing="300", after="0",
-                              first_line_indent="0", alignment="both")
-    elif para_type == "abstract-content":
-        set_paragraph_spacing(ppr, line_spacing="300", after="0",
-                              first_line_indent="0", alignment="both")
-    elif para_type == "keywords-label":
-        set_paragraph_spacing(ppr, line_spacing="300", after="0",
-                              first_line_indent="0", alignment="both")
     elif para_type == "h1":
         set_outline_level(para, 0)
         set_paragraph_spacing(ppr, line_spacing="360", after="120", before="240",
@@ -399,13 +373,7 @@ def format_paragraph(para: ET.Element, para_type: str,
     for run in para.findall(W("r")):
         format_run(run, para_type)
 
-    # 特殊处理：摘要和关键词标签后的内容
-    if para_type == "abstract-label":
-        state["in_abstract"] = True
-        state["in_keywords"] = False
-    elif para_type == "keywords-label":
-        state["in_abstract"] = False
-        state["in_keywords"] = True
+
 
 
 def format_docx(input_path: str, output_path: str, add_toc: bool = False) -> int:
