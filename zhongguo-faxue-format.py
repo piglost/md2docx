@@ -3,12 +3,14 @@
 zhongguo-faxue-format.py — 《中国法学》格式处理器
 
 按照《中国法学》投稿格式要求，对 docx 进行精确格式化：
-- 正标题：黑体，小二(18pt)，加粗，两端对齐
-- 摘要/关键词标签：宋体，五号(10.5pt)，加粗；内容：仿宋，五号，不加粗，左右缩进2字符
+- 正标题：宋体，二号(22pt)，加粗，居中
+- 作者信息：宋体，小三(15pt)，居中
+- 摘要/关键词标签：黑体，五号(10.5pt)，加粗；内容：宋体，五号，不加粗，顶格
 - 一级标题：黑体，四号(14pt)，居中，不加粗
 - 二级标题：黑体，小四(12pt)，两端对齐，不加粗
 - 三级标题：宋体，小四(12pt)，不加粗
 - 正文：宋体，小四(12pt)，首行缩进2字符
+- 正文行距：1.5倍行距(360 twips)
 - 脚注：宋体，小五(9pt)
 """
 
@@ -25,6 +27,8 @@ W = lambda tag: f"{{{W_NS}}}{tag}"
 
 # 中文字号 → half-points（Word 内部单位）
 SIZE = {
+    "二号": "44",   # 22pt
+    "小三": "30",   # 15pt
     "小二": "36",   # 18pt
     "四号": "28",   # 14pt
     "小四": "24",   # 12pt
@@ -220,15 +224,15 @@ def format_run(run: ET.Element, para_type: str, label_mode: bool = False):
     rpr = run.find(W("rPr"))
 
     if para_type == "title":
-        set_font(run, HEI_TI, TNR, SIZE["小二"], bold=True)
+        set_font(run, SONG_TI, TNR, SIZE["二号"], bold=True)
     elif para_type == "abstract-label":
-        set_font(run, SONG_TI, TNR, SIZE["五号"], bold=True)
+        set_font(run, HEI_TI, TNR, SIZE["五号"], bold=True)
     elif para_type == "abstract-content":
-        set_font(run, FANG_SONG, TNR, SIZE["五号"], bold=False)
+        set_font(run, SONG_TI, TNR, SIZE["五号"], bold=False)
     elif para_type == "keywords-label":
-        set_font(run, SONG_TI, TNR, SIZE["五号"], bold=True)
+        set_font(run, HEI_TI, TNR, SIZE["五号"], bold=True)
     elif para_type == "author":
-        set_font(run, SONG_TI, TNR, SIZE["小四"], bold=False)
+        set_font(run, SONG_TI, TNR, SIZE["小三"], bold=False)
     elif para_type == "h1":
         set_font(run, HEI_TI, TNR, SIZE["四号"], bold=False)
     elif para_type == "h2":
@@ -260,15 +264,8 @@ def format_paragraph(para: ET.Element, para_type: str,
         set_paragraph_spacing(ppr, line_spacing="300", after="0",
                               first_line_indent="0", alignment="both")
     elif para_type == "abstract-content":
-        # 左右缩进 2 字符
-        ind = ppr.find(W("ind"))
-        if ind is None:
-            ind = ET.SubElement(ppr, W("ind"))
-        ind.set(W("left"), INDENT_2CHAR)
-        ind.set(W("right"), INDENT_2CHAR)
-        ind.set(W("firstLine"), INDENT_2CHAR)
         set_paragraph_spacing(ppr, line_spacing="300", after="0",
-                              first_line_indent=INDENT_2CHAR, alignment="both")
+                              first_line_indent="0", alignment="both")
     elif para_type == "keywords-label":
         set_paragraph_spacing(ppr, line_spacing="300", after="0",
                               first_line_indent="0", alignment="both")
