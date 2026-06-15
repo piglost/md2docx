@@ -138,112 +138,94 @@ def set_paragraph_spacing(ppr: ET.Element, line_spacing: str = "360",
         jc.set(W("val"), alignment)
 
 
-def set_outline_level(para: ET.Element, level: int):
-    """为段落设置大纲级别（0=一级标题, 1=二级标题, 2=三级标题）"""
-    ppr = get_or_create_ppr(para)
-    # 移除旧的大纲级别
-    for el in ppr.findall(W("outlineLvl")):
-        ppr.remove(el)
-    ol = ET.SubElement(ppr, W("outlineLvl"))
-    ol.set(W("val"), str(level))
+def insert_toc(body: ET.Element, headings: list[tuple[int, str]]) -> None:
+    """在第一个 h1 标题前插入纯文本目次，带矩形边框。
 
-
-def insert_toc(body: ET.Element, paragraphs: list) -> None:
-    """在第一个 h1 标题前插入 Word 目次（TOC 域代码）。
-    打开 Word 后右键目次区域 → 更新域 即可自动生成。
+    参数：
+        body: Word 文档 body 元素
+        headings: [(level, text), ...] level 0=h1, 1=h2, 2=h3
     """
     # 找到第一个 h1 段落在 body 中的位置
     first_h1 = None
-    for p in paragraphs:
-        ppr = p.find(W("pPr"))
-        if ppr is not None:
-            ol = ppr.find(W("outlineLvl"))
-            if ol is not None and ol.get(W("val")) == "0":
-                first_h1 = p
-                break
+    for p in body.iter(W("p")):
+        text = get_paragraph_text(p)
+        if text and re.match(r"^[一二三四五六七八九十]+、", text):
+            first_h1 = p
+            break
 
-    if first_h1 is None:
-        # 没有 h1，在 body 开头插入
-        insert_pos = 0
-    else:
-        children = list(body)
+    children = list(body)
+    if first_h1 is not None:
         insert_pos = children.index(first_h1)
+    else:
+        insert_pos = 0
 
-    # ── TOC 域代码段落 ──
-    # 域代码：TOC \o "1-3" \h \z \u
-    # \o "1-3" = 收集1-3级标题; \h = 超链接; \z = Web视图隐藏制表符; \u = 用段落大纲级别
-    toc_para = ET.Element(W("p"))
-    toc_ppr = ET.SubElement(toc_para, W("pPr"))
-    # 添加矩形边框（包裹整个目次区域）
-    toc_pbdr = ET.SubElement(toc_ppr, W("pBdr"))
-    for side in ["top", "left", "bottom", "right"]:
-        border_el = ET.SubElement(toc_pbdr, W(side))
-        border_el.set(W("val"), "single")
-        border_el.set(W("sz"), "4")
-        border_el.set(W("space"), "4")
-        border_el.set(W("color"), "000000")
-    # "目 次" 标题作为 TOC 段落的第一个 run（在边框内）
-    th_run = ET.SubElement(toc_para, W("r"))
-    th_rpr = ET.SubElement(th_run, W("rPr"))
-    th_rf = ET.SubElement(th_rpr, W("rFonts"))
-    th_rf.set(W("eastAsia"), HEI_TI)
-    th_rf.set(W("ascii"), TNR)
-    th_rf.set(W("hAnsi"), TNR)
-    ET.SubElement(th_rpr, W("sz")).set(W("val"), SIZE["四号"])
-    ET.SubElement(th_rpr, W("szCs")).set(W("val"), SIZE["四号"])
-    ET.SubElement(th_run, W("t")).text = "目  次"
-    # 换行
-    br_run = ET.SubElement(toc_para, W("r"))
-    ET.SubElement(br_run, W("br"))
+    # ── "目 次" 标题段落（带边框）──
+    toc_title = ET.Element(W("p"))
+    tt_ppr = ET.SubElement(toc_title, W("pPr"))
+    tt_jc = ET.SubElement(tt_ppr, W("jc"))
+    tt_jc.set(W("val"), "center")
+    tt_spacing = ET.SubElement(tt_ppr, W("spacing"))
+    tt_spacing.set(W("before"), "240")
+    tt_spacing.set(W("after"), "120")
+    # 边框：仅上、左、右（标题和内容共享边框视觉效果）
+    tt_pbdr = ET.SubElement(tt_ppr, W("pBdr"))
+    for side in ["top", "left", "right"]:
+        el = ET.SubElement(tt_pbdr, W(side))
+        el.set(W("val"), "single")
+        el.set(W("sz"), "4")
+        el.set(W("space"), "4")
+        el.set(W("color"), "000000")
+    tt_run = ET.SubElement(toc_title, W("r"))
+    tt_rpr = ET.SubElement(tt_run, W("rPr"))
+    tt_rf = ET.SubElement(tt_rpr, W("rFonts"))
+    tt_rf.set(W("eastAsia"), HEI_TI)
+    tt_rf.set(W("ascii"), TNR)
+    tt_rf.set(W("hAnsi"), TNR)
+    ET.SubElement(tt_rpr, W("sz")).set(W("val"), SIZE["四号"])
+    ET.SubElement(tt_rpr, W("szCs")).set(W("val"), SIZE["四号"])
+    ET.SubElement(tt_run, W("t")).text = "目  次"
+    body.insert(insert_pos, toc_title)
+    insert_pos += 1
 
-    # fldChar begin
-    r1 = ET.SubElement(toc_para, W("r"))
-    r1rpr = ET.SubElement(r1, W("rPr"))
-    r1rf = ET.SubElement(r1rpr, W("rFonts"))
-    r1rf.set(W("eastAsia"), SONG_TI)
-    r1rf.set(W("ascii"), TNR)
-    r1rf.set(W("hAnsi"), TNR)
-    ET.SubElement(r1rpr, W("sz")).set(W("val"), SIZE["小四"])
-    ET.SubElement(r1rpr, W("szCs")).set(W("val"), SIZE["小四"])
-    fc1 = ET.SubElement(r1, W("fldChar"))
-    fc1.set(W("fldCharType"), "begin")
-
-    # instrText
-    r2 = ET.SubElement(toc_para, W("r"))
-    r2rpr = ET.SubElement(r2, W("rPr"))
-    r2rf = ET.SubElement(r2rpr, W("rFonts"))
-    r2rf.set(W("eastAsia"), SONG_TI)
-    r2rf.set(W("ascii"), TNR)
-    r2rf.set(W("hAnsi"), TNR)
-    ET.SubElement(r2rpr, W("sz")).set(W("val"), SIZE["小四"])
-    ET.SubElement(r2rpr, W("szCs")).set(W("val"), SIZE["小四"])
-    instr = ET.SubElement(r2, W("instrText"))
-    instr.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-    instr.text = ' TOC \\o "1-3" \\h \\z \\u '
-
-    # fldChar separate（分隔：域代码和结果之间）
-    r3 = ET.SubElement(toc_para, W("r"))
-    fc3 = ET.SubElement(r3, W("fldChar"))
-    fc3.set(W("fldCharType"), "separate")
-
-    # 占位文本
-    r4 = ET.SubElement(toc_para, W("r"))
-    r4rpr = ET.SubElement(r4, W("rPr"))
-    r4rf = ET.SubElement(r4rpr, W("rFonts"))
-    r4rf.set(W("eastAsia"), SONG_TI)
-    r4rf.set(W("ascii"), TNR)
-    r4rf.set(W("hAnsi"), TNR)
-    ET.SubElement(r4rpr, W("sz")).set(W("val"), SIZE["小四"])
-    ET.SubElement(r4rpr, W("szCs")).set(W("val"), SIZE["小四"])
-    r4t = ET.SubElement(r4, W("t"))
-    r4t.text = "（请在 Word 中右键此处 → 更新域，自动生成目次）"
-
-    # fldChar end
-    r5 = ET.SubElement(toc_para, W("r"))
-    fc5 = ET.SubElement(r5, W("fldChar"))
-    fc5.set(W("fldCharType"), "end")
-
-    body.insert(insert_pos, toc_para)
+    # ── 各条目段落 ──
+    # 缩进：h1=0, h2=2字符, h3=4字符
+    indent_map = {0: "0", 1: INDENT_2CHAR, 2: str(int(INDENT_2CHAR) * 2)}
+    for level, text in headings:
+        para = ET.Element(W("p"))
+        ppr = ET.SubElement(para, W("pPr"))
+        # 左缩进
+        ind = ET.SubElement(ppr, W("ind"))
+        indent_val = indent_map.get(level, "0")
+        ind.set(W("left"), indent_val)
+        # 间距
+        sp = ET.SubElement(ppr, W("spacing"))
+        sp.set(W("line"), "300")
+        sp.set(W("lineRule"), "auto")
+        sp.set(W("before"), "0")
+        sp.set(W("after"), "0")
+        # 左侧边框 + 上下边框（与标题段落共同构成矩形）
+        pbdr = ET.SubElement(ppr, W("pBdr"))
+        for side in ["left", "bottom", "right"]:
+            el = ET.SubElement(pbdr, W(side))
+            el.set(W("val"), "single")
+            el.set(W("sz"), "4")
+            el.set(W("space"), "4")
+            el.set(W("color"), "000000")
+        # 文本 run
+        run = ET.SubElement(para, W("r"))
+        rpr = ET.SubElement(run, W("rPr"))
+        rf = ET.SubElement(rpr, W("rFonts"))
+        rf.set(W("eastAsia"), SONG_TI)
+        rf.set(W("ascii"), TNR)
+        rf.set(W("hAnsi"), TNR)
+        ET.SubElement(rpr, W("sz")).set(W("val"), SIZE["五号"])
+        ET.SubElement(rpr, W("szCs")).set(W("val"), SIZE["五号"])
+        color = ET.SubElement(rpr, W("color"))
+        color.set(W("val"), "000000")
+        t = ET.SubElement(run, W("t"))
+        t.text = text
+        body.insert(insert_pos, para)
+        insert_pos += 1
 
 
 def classify_paragraph(text: str, is_first: bool) -> str:
@@ -352,15 +334,12 @@ def format_paragraph(para: ET.Element, para_type: str,
         set_paragraph_spacing(ppr, line_spacing="360", after="120",
                               first_line_indent="0", alignment="center")
     elif para_type == "h1":
-        set_outline_level(para, 0)
         set_paragraph_spacing(ppr, line_spacing="360", after="120", before="240",
                               first_line_indent="0", alignment="center")
     elif para_type == "h2":
-        set_outline_level(para, 1)
         set_paragraph_spacing(ppr, line_spacing="360", after="80", before="160",
                               first_line_indent="0", alignment="both")
     elif para_type == "h3":
-        set_outline_level(para, 2)
         set_paragraph_spacing(ppr, line_spacing="360", after="60", before="80",
                               first_line_indent=INDENT_2CHAR, alignment="both")
     elif para_type == "body":
@@ -410,15 +389,23 @@ def format_docx(input_path: str, output_path: str, add_toc: bool = False) -> int
 
         # 插入目次（在格式化之后，重新读取）
         if add_toc:
-            # 需要重新解析以获取最新 paragraphs
+            # 收集标题
+            level_map = {"h1": 0, "h2": 1, "h3": 2}
+            headings = []
+            for p in paragraphs:
+                pid = id(p)
+                if pid in para_types and para_types[pid] in level_map:
+                    text = get_paragraph_text(p)
+                    if text:
+                        headings.append((level_map[para_types[pid]], text))
+            # 重新解析并插入目次
             tree2 = ET.parse(str(doc_path))
             root2 = tree2.getroot()
             body2 = root2.find(W("body"))
             if body2 is not None:
-                paras2 = list(body2.iter(W("p")))
-                insert_toc(body2, paras2)
+                insert_toc(body2, headings)
                 tree2.write(str(doc_path), encoding="utf-8", xml_declaration=True)
-                print("   目次已插入（打开 Word 后右键 → 更新域即可生成）")
+                print(f"   目次已插入（{len(headings)} 个标题条目）")
 
         # 同时处理脚注字体（小五 宋体）
         fn_path = tmp_path / "word" / "footnotes.xml"
