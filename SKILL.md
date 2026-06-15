@@ -63,6 +63,10 @@ allowed-tools: [Bash, Read, Write]
    ```bash
    python3 ~/.claude/tools/md2docx/md2docx.py <输入文件.md> [输出文件.docx]
    ```
+   加 `--toc` 自动插入目次（Word 域代码，打开后右键→更新域即可生成）：
+   ```bash
+   python3 ~/.claude/tools/md2docx/md2docx.py <输入文件.md> [输出文件.docx] --toc
+   ```
 3. **报告结果**：脚注数量、格式化段落数、输出文件位置
 
 ## 参考文献支持格式

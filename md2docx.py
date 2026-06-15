@@ -316,7 +316,7 @@ def get_pandoc_cmd(input_md: str, output_docx: str, reference_doc: str | None = 
 
 
 def convert(input_path: str, output_path: str | None = None,
-            reference_doc: str | None = None) -> str:
+            reference_doc: str | None = None, add_toc: bool = False) -> str:
     """
     主转换函数。
 
@@ -401,10 +401,10 @@ def convert(input_path: str, output_path: str | None = None,
         with tmpmod2.NamedTemporaryFile(suffix=".docx", delete=False) as tmp2:
             zgf_tmp = tmp2.name
         try:
-            result3 = subprocess.run(
-                [sys.executable, str(zgf_format_script), output_abs, zgf_tmp],
-                capture_output=True, text=True,
-            )
+            zgf_cmd = [sys.executable, str(zgf_format_script), output_abs, zgf_tmp]
+            if add_toc:
+                zgf_cmd.append("--toc")
+            result3 = subprocess.run(zgf_cmd, capture_output=True, text=True)
             if result3.returncode == 0:
                 shutil.move(zgf_tmp, output_abs)
                 print(f"   {result3.stdout.strip()}")
@@ -456,6 +456,8 @@ def main():
                         help="参考样式模板 .docx（可选）")
     parser.add_argument("--dry-run", "-n", action="store_true",
                         help="仅显示预处理结果，不实际转换")
+    parser.add_argument("--toc", action="store_true",
+                        help="在标题前插入自动目次（Word 域代码）")
 
     args = parser.parse_args()
 
@@ -463,7 +465,7 @@ def main():
         processed = preprocess_markdown(args.input)
         print(processed)
     else:
-        convert(args.input, args.output, args.reference_doc)
+        convert(args.input, args.output, args.reference_doc, add_toc=args.toc)
 
 
 if __name__ == "__main__":
