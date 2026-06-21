@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.1 - 2026-06-21
+
+- Treat an unnumbered first-section `引言` / `引  言` heading as a first-level heading across all supported formats, while preserving the original unnumbered title text.
+- Display generated Word footnote references and footnote markers with square brackets, e.g. `[1]`.
+
 ## v0.3.0 - 2026-06-21
 
 - Add a manually selected course-paper format (`-f course`) based on the extracted OOXML layout of《论公共数据开放的数据价值实现原则.docx》:

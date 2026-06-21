@@ -210,6 +210,46 @@ class DocxStructureTests(unittest.TestCase):
         finally:
             holder.cleanup()
 
+    def test_footnote_references_are_bracketed_in_body_and_footnotes(self):
+        output, holder = convert(
+            "# 标题\n\n正文[1]。\n\n## 参考文献\n1. 文献一\n",
+            style="course",
+        )
+        try:
+            document = read_xml(output, "word/document.xml")
+            body_paragraph = paragraph_for_text(document, "正文")
+            body_runs = list(body_paragraph.findall(W("r")))
+            ref_index = next(
+                i for i, run in enumerate(body_runs)
+                if run.find(W("footnoteReference")) is not None
+            )
+            self.assertEqual(
+                "".join(t.text or "" for t in body_runs[ref_index - 1].iter(W("t"))),
+                "[",
+            )
+            self.assertEqual(
+                "".join(t.text or "" for t in body_runs[ref_index + 1].iter(W("t"))),
+                "]",
+            )
+
+            footnotes = read_xml(output, "word/footnotes.xml")
+            note_paragraph = paragraph_for_text(footnotes, "文献一")
+            note_runs = list(note_paragraph.findall(W("r")))
+            marker_index = next(
+                i for i, run in enumerate(note_runs)
+                if run.find(W("footnoteRef")) is not None
+            )
+            self.assertEqual(
+                "".join(t.text or "" for t in note_runs[marker_index - 1].iter(W("t"))),
+                "[",
+            )
+            self.assertEqual(
+                "".join(t.text or "" for t in note_runs[marker_index + 1].iter(W("t"))),
+                "]",
+            )
+        finally:
+            holder.cleanup()
+
     def test_faxue_matches_reference_page_geometry_and_headers(self):
         output, holder = convert(
             "# 《生态环境法典》的概念体系置换与话语体系建构\n\n"
@@ -619,6 +659,38 @@ class DocxStructureTests(unittest.TestCase):
         finally:
             holder.cleanup()
 
+    def test_intro_first_section_uses_h1_style_without_number_prefix(self):
+        cases = {
+            "faxue": ("黑体", "28"),
+            "sheke": ("方正小标宋简体", "30"),
+            "course": ("Heiti SC Medium", "28"),
+        }
+        markdown = (
+            "# 标题\n\n作者\n\n## 引言\n\n引言正文。\n\n"
+            "## 一、问题的提出\n\n正文。\n"
+        )
+        for style, (expected_font, expected_size) in cases.items():
+            with self.subTest(style=style):
+                output, holder = convert(markdown, style=style)
+                try:
+                    root = read_xml(output, "word/document.xml")
+                    intro = paragraph_for_text(root, "引言")
+                    intro_text = "".join(node.text or "" for node in intro.iter(W("t")))
+                    self.assertEqual(intro_text, "引言")
+                    self.assertEqual(
+                        intro.find(f"{W('pPr')}/{W('jc')}").get(W("val")),
+                        "center",
+                    )
+                    intro_run = run_for_text(intro, "引言")
+                    rpr = intro_run.find(W("rPr"))
+                    self.assertEqual(
+                        rpr.find(W("rFonts")).get(W("eastAsia")),
+                        expected_font,
+                    )
+                    self.assertEqual(rpr.find(W("sz")).get(W("val")), expected_size)
+                finally:
+                    holder.cleanup()
+
     def test_footnote_paragraph_spacing_is_zero_in_both_formats(self):
         markdown_by_style = {
             "faxue": "# 标题\n\n正文[1]。\n\n## 参考文献\n1. 文献一\n",
@@ -647,6 +719,8 @@ class DocxStructureTests(unittest.TestCase):
                                     run for run in paragraph.iter(W("r"))
                                     if run.find(W("footnoteRef")) is None
                                     and "".join(t.text or "" for t in run.iter(W("t"))).strip()
+                                    and "".join(t.text or "" for t in run.iter(W("t"))).strip()
+                                    not in ("[", "]")
                                 ]
                                 self.assertTrue(text_runs)
                                 rpr = text_runs[0].find(W("rPr"))
@@ -661,6 +735,8 @@ class DocxStructureTests(unittest.TestCase):
                                     run for run in paragraph.iter(W("r"))
                                     if run.find(W("footnoteRef")) is None
                                     and "".join(t.text or "" for t in run.iter(W("t"))).strip()
+                                    and "".join(t.text or "" for t in run.iter(W("t"))).strip()
+                                    not in ("[", "]")
                                 ]
                                 self.assertTrue(text_runs)
                                 rpr = text_runs[0].find(W("rPr"))

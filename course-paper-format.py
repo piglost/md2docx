@@ -162,6 +162,10 @@ def normalize_labeled_paragraph(paragraph: ET.Element, label: str) -> None:
     replace_runs(paragraph, parts)
 
 
+def is_intro_heading(text: str) -> bool:
+    return re.sub(r"\s+", "", text) == "引言"
+
+
 def classify_paragraph(text: str, index: int) -> str:
     if not text:
         return "empty"
@@ -185,7 +189,16 @@ def classify_paragraph(text: str, index: int) -> str:
 def classify_all(paragraphs: list[ET.Element]) -> dict[int, str]:
     non_empty = [(p, get_text(p)) for p in paragraphs]
     non_empty = [(p, text) for p, text in non_empty if text]
-    return {id(p): classify_paragraph(text, i) for i, (p, text) in enumerate(non_empty)}
+    types: dict[int, str] = {}
+    seen_section_heading = False
+    for i, (paragraph, text) in enumerate(non_empty):
+        para_type = classify_paragraph(text, i)
+        if para_type == "body" and is_intro_heading(text) and not seen_section_heading:
+            para_type = "h1"
+        if para_type in ("h1", "h2"):
+            seen_section_heading = True
+        types[id(paragraph)] = para_type
+    return types
 
 
 def format_paragraph(paragraph: ET.Element, para_type: str) -> None:

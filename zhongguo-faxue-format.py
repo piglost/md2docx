@@ -282,6 +282,10 @@ def insert_toc(body: ET.Element, headings: list[tuple[int, str]]) -> None:
         insert_pos += 1
 
 
+def is_intro_heading(text: str) -> bool:
+    return re.sub(r"\s+", "", text) == "引言"
+
+
 def classify_paragraph(text: str, is_first: bool) -> str:
     """将段落分类为：title / author / abstract-label / abstract-content /
        keywords-label / h1 / h2 / h3 / body"""
@@ -320,6 +324,7 @@ def classify_all_paragraphs(paragraphs: list) -> dict:
     types = {}
 
     # ── 第一遍：硬匹配 ──
+    seen_section_heading = False
     for i, (p, text) in enumerate(para_list):
         pt = classify_paragraph(text, i == 0)
         if pt == "body" and i == 0:
@@ -328,6 +333,10 @@ def classify_all_paragraphs(paragraphs: list) -> dict:
         if i == 1 and types.get(id(para_list[0][0])) == "title" and pt == "body":
             if re.match(r"^(作者|单位|Author)", text) or re.fullmatch(r"[\u4e00-\u9fff·]{2,8}", text):
                 pt = "author"
+        if pt == "body" and is_intro_heading(text) and not seen_section_heading:
+            pt = "h1"
+        if pt in ("h1", "h2", "h3"):
+            seen_section_heading = True
         types[id(p)] = pt
 
     # ── 第二遍：推断抽象区域 ──

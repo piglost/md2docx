@@ -20,6 +20,7 @@ import os
 import subprocess
 import tempfile
 import zipfile
+import copy
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -524,6 +525,71 @@ def count_docx_footnotes(path: str) -> int:
         raise ConversionError(f"无法读取脚注结构: {exc}") from exc
 
 
+def bracket_footnote_references(docx_path: str) -> int:
+    """给正文脚注引用和脚注区编号添加方括号，显示为 [1] 样式。"""
+    from xml.etree import ElementTree as ET
+
+    namespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    ET.register_namespace("w", namespace)
+    W = lambda tag: f"{{{namespace}}}{tag}"
+
+    def run_text(run: ET.Element) -> str:
+        return "".join(node.text or "" for node in run.iter(W("t")))
+
+    def has_field(run: ET.Element, field_name: str) -> bool:
+        return run.find(W(field_name)) is not None
+
+    def make_bracket_run(text: str, template_run: ET.Element) -> ET.Element:
+        run = ET.Element(W("r"))
+        rpr = template_run.find(W("rPr"))
+        if rpr is not None:
+            run.append(copy.deepcopy(rpr))
+        text_node = ET.SubElement(run, W("t"))
+        text_node.text = text
+        return run
+
+    def bracket_runs_in_part(root: ET.Element, field_name: str) -> int:
+        changed = 0
+        for paragraph in root.iter(W("p")):
+            children = list(paragraph)
+            for index, child in reversed(list(enumerate(children))):
+                if child.tag != W("r") or not has_field(child, field_name):
+                    continue
+                prev_text = run_text(children[index - 1]) if index > 0 else ""
+                next_text = run_text(children[index + 1]) if index + 1 < len(children) else ""
+                if prev_text == "[" and next_text == "]":
+                    continue
+                paragraph.insert(index + 1, make_bracket_run("]", child))
+                paragraph.insert(index, make_bracket_run("[", child))
+                changed += 1
+        return changed
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        with zipfile.ZipFile(docx_path, "r") as archive:
+            archive.extractall(tmp)
+
+        changed = 0
+        parts = [
+            (tmp / "word" / "document.xml", "footnoteReference"),
+            (tmp / "word" / "footnotes.xml", "footnoteRef"),
+        ]
+        for part_path, field_name in parts:
+            if not part_path.exists():
+                continue
+            tree = ET.parse(str(part_path))
+            root = tree.getroot()
+            changed += bracket_runs_in_part(root, field_name)
+            tree.write(str(part_path), encoding="utf-8", xml_declaration=True)
+
+        if changed:
+            with zipfile.ZipFile(docx_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                for file_path in tmp.rglob("*"):
+                    if file_path.is_file():
+                        archive.write(file_path, file_path.relative_to(tmp))
+    return changed
+
+
 def run_conversion_step(cmd: list[str], step_name: str) -> subprocess.CompletedProcess:
     """运行外部转换步骤，失败时抛出可供 CLI 统一处理的异常。"""
     try:
@@ -654,6 +720,10 @@ def convert(input_path: str, output_path: str | None = None,
         validate_docx(formatted_output)
         os.replace(formatted_output, working_docx)
         print(f"   {result3.stdout.strip()}")
+
+        bracket_count = bracket_footnote_references(working_docx)
+        if bracket_count:
+            print(f"🔖 后处理：脚注引用已添加方括号（{bracket_count} 处）")
 
         validate_docx(working_docx)
         os.replace(working_docx, output_abs)

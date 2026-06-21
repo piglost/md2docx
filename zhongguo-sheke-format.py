@@ -189,6 +189,10 @@ def normalize_labeled_paragraph(para, para_type):
     replace_paragraph_runs(para, parts)
 
 
+def is_intro_heading(text):
+    return re.sub(r"\s+", "", text) == "引言"
+
+
 def classify_paragraph(text, is_first):
     if not text:
         return "empty"
@@ -200,7 +204,7 @@ def classify_paragraph(text, is_first):
         return "keywords-label"
     if re.match(r"^[一二三四五六七八九十]+、", text):
         return "h1"
-    if text.strip() in ("引言", "引  言", "结语", "结  语", "结论", "结  论"):
+    if text.strip() in ("结语", "结  语", "结论", "结  论"):
         return "h1"
     if re.match(r"^（[一二三四五六七八九十]+）", text):
         return "h2"
@@ -216,6 +220,7 @@ def classify_all_paragraphs(paragraphs):
         return {}
 
     types = {}
+    seen_section_heading = False
     for i, (p, text) in enumerate(para_list):
         pt = classify_paragraph(text, i == 0)
         if pt == "body" and i == 0:
@@ -225,8 +230,13 @@ def classify_all_paragraphs(paragraphs):
                 pt = "subtitle"
         if i <= 2 and pt == "body":
             prev_types = [types.get(id(para_list[j][0])) for j in range(i)]
-            if "title" in prev_types and re.match(r"^[\u4e00-\u9fff]{2,4}$", text.replace(" ", "")):
+            if ("title" in prev_types and "author" not in prev_types
+                    and re.match(r"^[\u4e00-\u9fff]{2,4}$", text.replace(" ", ""))):
                 pt = "author"
+        if pt == "body" and is_intro_heading(text) and not seen_section_heading:
+            pt = "h1"
+        if pt in ("h1", "h2", "h3"):
+            seen_section_heading = True
         types[id(p)] = pt
 
     # 独立摘要标题后的正文，直到关键词之前，属于摘要内容。
@@ -355,13 +365,6 @@ def format_paragraph(para, para_type):
 
     if para_type in ("abstract-label", "keywords-label"):
         normalize_labeled_paragraph(para, para_type)
-
-    # "引言" → "引   言"
-    if para_type == "h1":
-        for run in para.findall(W("r")):
-            for t in run.findall(W("t")):
-                if t.text and t.text.strip() == "引言":
-                    t.text = "引   言"
 
 
 def next_relationship_ids(relationships, count):
