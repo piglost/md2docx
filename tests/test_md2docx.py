@@ -353,7 +353,7 @@ class DocxStructureTests(unittest.TestCase):
             self.assertEqual(abstract_indent.get(W("firstLine")), "454")
 
             body, fonts, size, _, body_spacing = style_for("正文第一段")
-            self.assertEqual(fonts.get(W("eastAsia")), "方正书宋简体")
+            self.assertEqual(fonts.get(W("eastAsia")), "宋体")
             self.assertEqual(size.get(W("val")), "22")
             self.assertEqual(body_spacing.get(W("line")), "330")
             self.assertEqual(body_spacing.get(W("lineRule")), "exact")
@@ -367,6 +367,12 @@ class DocxStructureTests(unittest.TestCase):
                 "黑体",
             )
             self.assertEqual(h1_run.find(f"{W('rPr')}/{W('sz')}").get(W("val")), "28")
+
+            h2 = paragraph_for_text(root, "（一）二级标题")
+            self.assertEqual(
+                h2.find(f"{W('pPr')}/{W('ind')}").get(W("firstLine")),
+                "454",
+            )
         finally:
             holder.cleanup()
 

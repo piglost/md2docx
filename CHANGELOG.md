@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.3.2 - 2026-06-21
+
+- Change《中国法学》body text from Fangzheng Shusong to Songti.
+- Indent《中国法学》second-level headings such as `（一）` by two characters.
+
 ## v0.3.1 - 2026-06-21
 
 - Treat an unnumbered first-section `引言` / `引  言` heading as a first-level heading across all supported formats, while preserving the original unnumbered title text.

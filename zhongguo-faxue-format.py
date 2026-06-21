@@ -7,7 +7,7 @@ zhongguo-faxue-format.py — 《中国法学》格式处理器
 - 正标题：方正小标宋 22pt，居中
 - 作者：方正楷体 14pt，居中
 - 内容提要/关键词：黑体标签 + 楷体内容，PDF 实测 10.8pt，固定 18pt 行距
-- 正文：方正书宋，PDF 实测 10.8pt，固定 16.5pt 行距
+- 正文：宋体，PDF 实测 10.8pt，固定 16.5pt 行距
 - 页眉：方正仿宋，PDF 实测 9.7pt，奇数页文章名，偶数页刊名
 - 脚注：方正书宋，PDF 实测 7.8pt，固定 12pt 行距，段前段后 0 磅
 """
@@ -386,7 +386,7 @@ def format_run(run: ET.Element, para_type: str, label_mode: bool = False):
         set_font(run, KAI_TI, TNR, SIZE["实刊摘要"], bold=False,
                  preserve_emphasis=preserve_emphasis)
     else:  # body
-        set_font(run, SHU_SONG, TNR, SIZE["实刊正文"], bold=False,
+        set_font(run, SONG_TI, TNR, SIZE["实刊正文"], bold=False,
                  preserve_emphasis=preserve_emphasis)
 
 
@@ -416,7 +416,7 @@ def format_paragraph(para: ET.Element, para_type: str,
                               first_line_indent="0", alignment="center")
     elif para_type == "h2":
         set_paragraph_spacing(ppr, line_spacing=BODY_LINE, after="80", before="160",
-                              first_line_indent="0", alignment="left")
+                              first_line_indent=INDENT_2CHAR, alignment="left")
     elif para_type == "h3":
         set_paragraph_spacing(ppr, line_spacing=BODY_LINE, after="60", before="80",
                               first_line_indent=INDENT_2CHAR, alignment="both")
