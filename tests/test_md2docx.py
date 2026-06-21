@@ -533,10 +533,97 @@ class DocxStructureTests(unittest.TestCase):
         finally:
             holder.cleanup()
 
+    def test_course_paper_matches_extracted_document_format(self):
+        output, holder = convert(
+            "# 论公共数据开放的数据价值实现原则\n\n"
+            "格式 Demo\n\n"
+            "摘要：摘要正文。\n\n关键词：公共数据开放；数据价值\n\n"
+            "## 一、问题的提出\n\n正文第一段。\n\n"
+            "### （一）价值实现原则的规范定位\n\n正文第二段。[1]\n\n"
+            "## 参考文献\n1. 文献一\n",
+            style="course",
+        )
+        try:
+            root = read_xml(output, "word/document.xml")
+            section = root.find(f".//{W('sectPr')}")
+            page_size = section.find(W("pgSz"))
+            margins = section.find(W("pgMar"))
+            self.assertEqual(page_size.get(W("w")), "11906")
+            self.assertEqual(page_size.get(W("h")), "16838")
+            self.assertEqual(margins.get(W("top")), "1440")
+            self.assertEqual(margins.get(W("bottom")), "1440")
+            self.assertEqual(margins.get(W("left")), "1800")
+            self.assertEqual(margins.get(W("right")), "1800")
+
+            def style_for(text):
+                paragraph = paragraph_for_text(root, text)
+                run = run_for_text(paragraph, text)
+                rpr = run.find(W("rPr"))
+                fonts = rpr.find(W("rFonts"))
+                size = rpr.find(W("sz"))
+                spacing = paragraph.find(f"{W('pPr')}/{W('spacing')}")
+                indent = paragraph.find(f"{W('pPr')}/{W('ind')}")
+                return paragraph, fonts, size, rpr, spacing, indent
+
+            _, fonts, size, rpr, _, _ = style_for("论公共数据开放")
+            self.assertEqual(fonts.get(W("eastAsia")), "Heiti SC Light")
+            self.assertEqual(size.get(W("val")), "36")
+            self.assertIsNotNone(rpr.find(W("b")))
+
+            abstract = paragraph_for_text(root, "摘要： 摘要正文")
+            label_run = run_for_text(abstract, "摘要：")
+            content_run = run_for_text(abstract, "摘要正文")
+            self.assertEqual(
+                label_run.find(f"{W('rPr')}/{W('rFonts')}").get(W("eastAsia")),
+                "Songti SC",
+            )
+            self.assertIsNotNone(label_run.find(f"{W('rPr')}/{W('b')}"))
+            self.assertEqual(
+                content_run.find(f"{W('rPr')}/{W('rFonts')}").get(W("eastAsia")),
+                "仿宋",
+            )
+            abstract_indent = abstract.find(f"{W('pPr')}/{W('ind')}")
+            self.assertEqual(abstract_indent.get(W("left")), "480")
+            self.assertEqual(abstract_indent.get(W("right")), "480")
+            self.assertEqual(abstract_indent.get(W("firstLine")), "420")
+
+            body, fonts, size, _, spacing, indent = style_for("正文第一段")
+            self.assertEqual(fonts.get(W("eastAsia")), "Songti SC")
+            self.assertEqual(size.get(W("val")), "24")
+            self.assertEqual(spacing.get(W("line")), "360")
+            self.assertEqual(spacing.get(W("lineRule")), "auto")
+            self.assertEqual(indent.get(W("firstLine")), "480")
+            self.assertEqual(
+                body.find(f"{W('pPr')}/{W('jc')}").get(W("val")),
+                "both",
+            )
+
+            h1 = paragraph_for_text(root, "一、问题的提出")
+            h1_run = run_for_text(h1, "一、问题的提出")
+            self.assertEqual(
+                h1_run.find(f"{W('rPr')}/{W('rFonts')}").get(W("eastAsia")),
+                "Heiti SC Medium",
+            )
+            self.assertEqual(h1_run.find(f"{W('rPr')}/{W('sz')}").get(W("val")), "28")
+            self.assertIsNotNone(h1_run.find(f"{W('rPr')}/{W('b')}"))
+
+            footnotes = read_xml(output, "word/footnotes.xml")
+            text_run = next(
+                run for run in footnotes.iter(W("r"))
+                if run.find(W("footnoteRef")) is None
+                and "文献一" in "".join(t.text or "" for t in run.iter(W("t")))
+            )
+            rpr = text_run.find(W("rPr"))
+            self.assertEqual(rpr.find(W("rFonts")).get(W("eastAsia")), "宋体")
+            self.assertEqual(rpr.find(W("sz")).get(W("val")), "18")
+        finally:
+            holder.cleanup()
+
     def test_footnote_paragraph_spacing_is_zero_in_both_formats(self):
         markdown_by_style = {
             "faxue": "# 标题\n\n正文[1]。\n\n## 参考文献\n1. 文献一\n",
             "sheke": "# 标题\n\n摘 要：测试。正文〔1〕。\n\n## 参考文献\n〔1〕文献一\n",
+            "course": "# 标题\n\n正文[1]。\n\n## 参考文献\n1. 文献一\n",
         }
         for style, markdown in markdown_by_style.items():
             with self.subTest(style=style):
@@ -568,6 +655,20 @@ class DocxStructureTests(unittest.TestCase):
                                     "方正书宋简体",
                                 )
                                 self.assertEqual(rpr.find(W("sz")).get(W("val")), "16")
+                            elif style == "course":
+                                self.assertEqual(spacing.get(W("line")), "240")
+                                text_runs = [
+                                    run for run in paragraph.iter(W("r"))
+                                    if run.find(W("footnoteRef")) is None
+                                    and "".join(t.text or "" for t in run.iter(W("t"))).strip()
+                                ]
+                                self.assertTrue(text_runs)
+                                rpr = text_runs[0].find(W("rPr"))
+                                self.assertEqual(
+                                    rpr.find(W("rFonts")).get(W("eastAsia")),
+                                    "宋体",
+                                )
+                                self.assertEqual(rpr.find(W("sz")).get(W("val")), "18")
                 finally:
                     holder.cleanup()
 

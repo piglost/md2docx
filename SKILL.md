@@ -1,12 +1,12 @@
 ---
 name: md2docx
-description: 将 Markdown 法律文档转换为 Word (.docx)，自动把引用标记转为 Word 脚注，支持《中国法学》和《中国社会科学》格式排版。触发词：md2docx、转word、转换docx、导出Word、生成word。
+description: 将 Markdown 法律文档转换为 Word (.docx)，自动把引用标记转为 Word 脚注，支持《中国法学》《中国社会科学》和课程论文格式排版。触发词：md2docx、转word、转换docx、导出Word、生成word。
 allowed-tools: [Bash, Read, Write]
 ---
 
 # md2docx — Markdown 转 Word（法律写作专用）
 
-将 Markdown 文档转换为 Word (.docx)，自动检测或手动应用《中国法学》《中国社会科学》格式。
+将 Markdown 文档转换为 Word (.docx)，自动检测或手动应用《中国法学》《中国社会科学》格式，也可手动指定课程论文格式。
 
 ## 格式规范
 
@@ -36,11 +36,25 @@ allowed-tools: [Bash, Read, Write]
 | 正文 | 方正书宋简体 | 11pt | 两端对齐、固定 18.6pt 行距 |
 | 脚注 | 方正仿宋简体 | 10pt | 圆圈数字、每页重新编号 |
 
+课程论文格式以《论公共数据开放的数据价值实现原则.docx》OOXML 提取结果为基准：
+
+| 元素 | 字体 | 字号 | 版式 |
+|------|------|------|------|
+| 正标题 | Heiti SC Light | 18pt | 居中、加粗 |
+| 作者/署名 | Songti SC | 12pt | 居中 |
+| 摘要/关键词标签 | Songti SC | 10.5pt | 加粗，标签与正文分 run |
+| 摘要/关键词正文 | 仿宋 | 10.5pt | 左右缩进、1.5 倍行距 |
+| 一级标题 | Heiti SC Medium | 14pt | 居中、加粗 |
+| 二级标题 | Heiti SC Medium | 12pt | 左对齐、加粗 |
+| 正文 | Songti SC | 12pt | 两端对齐、1.5 倍行距 |
+| 脚注 | 宋体 | 9pt | 段前段后 0 磅 |
+
 ### 段落格式
 
 - **正文：两端对齐，首行缩进 2 字符**
 - 《中国法学》正文行距：固定 16.5pt；页面约 541.4 × 754.0pt；镜像边距；`--toc` 只列一级标题
 - 《中国社会科学》正文行距：固定 18.6pt；页面约 201 × 280 mm，使用镜像边距
+- 课程论文正文：A4 页面，上下 72pt、左右 90pt，首行缩进 24pt，1.5 倍行距
 - 一级标题：居中，段前段后间距
 - 《中国社会科学》首页不显示页眉，后续奇偶页分别显示文章名和刊名，并使用外侧页码
 - 所有文字颜色：纯黑 `#000000`
@@ -52,7 +66,7 @@ allowed-tools: [Bash, Read, Write]
 - 支持 `[1]`、`1.`、`〔1〕`、`①` 至 `⑳` 四种参考文献编号
 - 保留正文加粗、斜体、下划线、链接、列表和代码片段
 - 引用缺失、重复定义、逆序或过大范围会明确报错并停止转换
-- 两种格式的脚注注文段前段后均为 0 磅
+- 三种格式的脚注注文段前段后均为 0 磅
 
 ## 三道转换防线
 
@@ -60,11 +74,11 @@ allowed-tools: [Bash, Read, Write]
 |------|------|------|
 | ① Pandoc Lua 过滤器 | `strip-color.lua` | 转换时剥离 Span/Link/Code 颜色 |
 | ② Heading 修复 | `fix_pandoc_heading_artifacts.py` | 移除 Pandoc 生成的标题蓝绿色、自动编号 |
-| ③ 期刊格式 | `zhongguo-faxue-format.py` / `zhongguo-sheke-format.py` | 设置字体、版心、页眉页码和脚注 |
+| ③ 格式后处理 | `zhongguo-faxue-format.py` / `zhongguo-sheke-format.py` / `course-paper-format.py` | 设置字体、版心、页眉页码和脚注 |
 
 ### 格式来源
 
-《中国法学》以 2026 年第 3 期实刊为基准；《中国社会科学》以 2026 年第 2 期《债权实现的程序法运行机理》为基准。
+《中国法学》以 2026 年第 3 期实刊为基准；《中国社会科学》以 2026 年第 2 期《债权实现的程序法运行机理》为基准；课程论文以《论公共数据开放的数据价值实现原则.docx》为基准。
 
 ## 调用方式
 
@@ -83,6 +97,10 @@ allowed-tools: [Bash, Read, Write]
    加 `--toc` 插入静态目次（仅《中国法学》格式）：
    ```bash
    python3 ~/.claude/tools/md2docx/md2docx.py <输入文件.md> [输出文件.docx] --toc
+   ```
+   手动指定课程论文格式：
+   ```bash
+   python3 ~/.claude/tools/md2docx/md2docx.py <输入文件.md> [输出文件.docx] -f course
    ```
 3. **报告结果**：脚注数量、格式化段落数、输出文件位置
 

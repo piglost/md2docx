@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0 - 2026-06-21
+
+- Add a manually selected course-paper format (`-f course`) based on the extracted OOXML layout of《论公共数据开放的数据价值实现原则.docx》:
+  - A4 page, 72pt top/bottom margins, and 90pt left/right margins,
+  - Songti SC 12pt body text with 24pt first-line indent and 1.5x line spacing,
+  - Heiti SC Light title and Heiti SC Medium headings,
+  - Songti SC bold labels with 仿宋 abstract/keyword content,
+  - 宋体 9pt footnotes with zero before/after spacing.
+- Keep `auto` detection unchanged so existing journal workflows still choose only《中国法学》or《中国社会科学》unless `-f course` is specified.
+- Add regression tests for the course-paper page geometry, fonts, paragraph spacing, heading hierarchy, and footnote typography.
+- Update README and skill instructions with the new format option.
+
 ## v0.2.1 - 2026-06-21
 
 - Refine《中国法学》formatting against the measured PDF layout of《深度伪造技术全链式刑事治理模式研究》:

@@ -552,7 +552,8 @@ def convert(input_path: str, output_path: str | None = None,
         input_path: 输入的 .md 文件路径
         output_path: 输出的 .docx 路径（默认：同名 .docx）
         reference_doc: 参考样式模板 .docx（可选）
-        format_style: 排版风格 - "faxue"(中国法学) / "sheke"(中国社会科学) / "auto"(自动检测)
+        format_style: 排版风格 - "faxue"(中国法学) / "sheke"(中国社会科学) /
+            "course"(课程论文) / "auto"(自动检测)
 
     返回：
         输出文件路径
@@ -564,7 +565,7 @@ def convert(input_path: str, output_path: str | None = None,
         reference_doc = os.path.abspath(reference_doc)
         if not os.path.exists(reference_doc):
             raise FileNotFoundError(f"参考样式模板不存在: {reference_doc}")
-    if format_style not in ("auto", "faxue", "sheke"):
+    if format_style not in ("auto", "faxue", "sheke", "course"):
         raise ConversionError(f"不支持的排版风格: {format_style}")
 
     if output_path is None:
@@ -628,17 +629,19 @@ def convert(input_path: str, output_path: str | None = None,
         format_scripts = {
             "faxue": SCRIPT_DIR / "zhongguo-faxue-format.py",
             "sheke": SCRIPT_DIR / "zhongguo-sheke-format.py",
+            "course": SCRIPT_DIR / "course-paper-format.py",
         }
         format_names = {
             "faxue": "《中国法学》",
             "sheke": "《中国社会科学》",
+            "course": "课程论文",
         }
         fmt_script = format_scripts[format_style]
         fmt_name = format_names[format_style]
         if not os.path.exists(str(fmt_script)):
             raise ConversionError(f"缺少期刊格式化脚本: {fmt_script}")
-        if add_toc and format_style == "sheke":
-            raise ConversionError("《中国社会科学》格式暂不支持 --toc")
+        if add_toc and format_style in ("sheke", "course"):
+            raise ConversionError(f"{fmt_name}格式暂不支持 --toc")
 
         print(f"📐 后处理：应用{fmt_name}格式...")
         formatted_output = new_temp_docx(output_dir)
@@ -691,9 +694,10 @@ def main():
                         help="仅显示预处理结果，不实际转换")
     parser.add_argument("--toc", action="store_true",
                         help="在标题前插入静态目次（仅中国法学格式）")
-    parser.add_argument("--format", "-f", choices=["faxue", "sheke", "auto"],
+    parser.add_argument("--format", "-f",
+                        choices=["faxue", "sheke", "course", "auto"],
                         default="auto",
-                        help="排版风格: faxue=中国法学, sheke=中国社会科学, auto=自动检测(默认)")
+                        help="排版风格: faxue=中国法学, sheke=中国社会科学, course=课程论文, auto=自动检测(默认)")
 
     args = parser.parse_args()
 
