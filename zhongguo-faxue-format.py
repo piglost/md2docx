@@ -2,14 +2,14 @@
 """
 zhongguo-faxue-format.py — 《中国法学》格式处理器
 
-版式以《中国法学》2026 年第 3 期实刊为基准：
+版式以《中国法学》2026 年第 3 期《深度伪造技术全链式刑事治理模式研究》为基准：
 - 页面约 541.4 x 754.0 pt
 - 正标题：方正小标宋 22pt，居中
 - 作者：方正楷体 14pt，居中
-- 内容提要/关键词：黑体标签 + 楷体内容，10.5pt
-- 正文：方正书宋 10.5pt，固定 15pt 行距
-- 页眉：奇数页文章名，偶数页刊名
-- 脚注：宋体小五，段前段后 0 磅
+- 内容提要/关键词：黑体标签 + 楷体内容，PDF 实测 10.8pt，固定 18pt 行距
+- 正文：方正书宋，PDF 实测 10.8pt，固定 16.5pt 行距
+- 页眉：方正仿宋，PDF 实测 9.7pt，奇数页文章名，偶数页刊名
+- 脚注：方正书宋，PDF 实测 7.8pt，固定 12pt 行距，段前段后 0 磅
 """
 
 import zipfile
@@ -42,16 +42,22 @@ SIZE = {
     "小五": "18",   # 9pt
     "实刊标题": "44",
     "实刊作者": "28",
-    "实刊正文": "21",
+    # Word 字号以 half-point 表示，PDF 实测 10.8pt 取最近的 11pt。
+    "实刊正文": "22",
+    "实刊摘要": "22",
+    "实刊页眉": "19",   # PDF 实测 9.7pt，取 9.5pt。
+    "实刊页码": "21",   # PDF 实测 10.3pt，取 10.5pt。
+    "实刊脚注": "16",   # PDF 实测 7.8pt，取 8pt。
 }
 
 # 字体
 HEI_TI = "黑体"
 SONG_TI = "宋体"
 SHU_SONG = "方正书宋简体"
-FANG_SONG = "仿宋"
+FANG_SONG = "方正仿宋简体"
 KAI_TI = "方正楷体简体"
 XIAO_BIAO_SONG = "方正小标宋简体"
+LANTING_CUHEI = "方正兰亭粗黑简体"
 TNR = "Times New Roman"
 
 PAGE_WIDTH = "10828"
@@ -59,16 +65,17 @@ PAGE_HEIGHT = "15080"
 PAGE_MARGIN_TOP = "1440"
 PAGE_MARGIN_BOTTOM = "900"
 PAGE_MARGIN_LEFT = "1304"
-PAGE_MARGIN_RIGHT = "1304"
+PAGE_MARGIN_RIGHT = "1361"
 BODY_FIRST_LINE = "454"
-ABSTRACT_LEFT = "510"
+ABSTRACT_LEFT = "454"
+ABSTRACT_RIGHT = "510"
 ABSTRACT_FIRST_LINE = "454"
-TOC_LEFT = "1320"
-BODY_LINE = "300"
+TOC_LEFT = "1032"
+BODY_LINE = "330"
 ABSTRACT_LINE = "360"
 FOOTNOTE_LINE = "240"
 
-# 缩进 2 字符，按实刊 10.5pt 正文字号折算。
+# 缩进 2 字符，按 PDF 实测 10.8pt 正文字号折算，约 22.68pt。
 INDENT_2CHAR = BODY_FIRST_LINE
 
 
@@ -178,7 +185,8 @@ def set_paragraph_spacing(ppr: ET.Element, line_spacing: str = "360",
         jc.set(W("val"), alignment)
 
 
-def set_paragraph_border(ppr: ET.Element, sides: list[str]) -> None:
+def set_paragraph_border(ppr: ET.Element, sides: list[str],
+                         size: str = "4", space: str = "4") -> None:
     for old in ppr.findall(W("pBdr")):
         ppr.remove(old)
     borders = ET.Element(W("pBdr"))
@@ -192,8 +200,8 @@ def set_paragraph_border(ppr: ET.Element, sides: list[str]) -> None:
     for side in sides:
         edge = ET.SubElement(borders, W(side))
         edge.set(W("val"), "single")
-        edge.set(W("sz"), "4")
-        edge.set(W("space"), "4")
+        edge.set(W("sz"), size)
+        edge.set(W("space"), space)
         edge.set(W("color"), "000000")
 
 
@@ -220,9 +228,9 @@ def normalize_labeled_paragraph(para: ET.Element, para_type: str) -> None:
         match = re.match(r"^关键词\s*[：:]?\s*(.*)$", text)
         label = "关键词"
     content = match.group(1) if match else ""
-    parts = [(label, HEI_TI, SIZE["五号"])]
+    parts = [(label, HEI_TI, SIZE["实刊摘要"])]
     if content:
-        parts.append((" " + content.lstrip(), KAI_TI, SIZE["五号"]))
+        parts.append((" " + content.lstrip(), KAI_TI, SIZE["实刊摘要"]))
     replace_paragraph_runs(para, parts)
 
 
@@ -252,7 +260,7 @@ def insert_toc(body: ET.Element, headings: list[tuple[int, str]]) -> None:
         first_line_indent="0", alignment="center", left=TOC_LEFT)
     set_paragraph_border(tt_ppr, ["top", "left", "right"])
     tt_run = ET.SubElement(toc_title, W("r"))
-    set_font(tt_run, HEI_TI, TNR, SIZE["四号"], bold=False)
+    set_font(tt_run, LANTING_CUHEI, TNR, SIZE["实刊摘要"], bold=False)
     ET.SubElement(tt_run, W("t")).text = "目  次"
     body.insert(insert_pos, toc_title)
     insert_pos += 1
@@ -268,7 +276,7 @@ def insert_toc(body: ET.Element, headings: list[tuple[int, str]]) -> None:
             sides.append("bottom")
         set_paragraph_border(ppr, sides)
         run = ET.SubElement(para, W("r"))
-        set_font(run, KAI_TI, TNR, SIZE["五号"], bold=False)
+        set_font(run, KAI_TI, TNR, SIZE["实刊摘要"], bold=False)
         ET.SubElement(run, W("t")).text = text
         body.insert(insert_pos, para)
         insert_pos += 1
@@ -360,13 +368,13 @@ def format_run(run: ET.Element, para_type: str, label_mode: bool = False):
     elif para_type == "author":
         set_font(run, KAI_TI, TNR, SIZE["实刊作者"], bold=False)
     elif para_type == "h1":
-        set_font(run, HEI_TI, TNR, SIZE["五号"], bold=False)
+        set_font(run, HEI_TI, TNR, SIZE["四号"], bold=False)
     elif para_type == "h2":
-        set_font(run, HEI_TI, TNR, SIZE["五号"], bold=False)
+        set_font(run, HEI_TI, TNR, SIZE["实刊摘要"], bold=False)
     elif para_type == "h3":
         set_font(run, SHU_SONG, TNR, SIZE["实刊正文"], bold=False)
     elif para_type in ("abstract-label", "keywords-label", "abstract-content"):
-        set_font(run, KAI_TI, TNR, SIZE["五号"], bold=False,
+        set_font(run, KAI_TI, TNR, SIZE["实刊摘要"], bold=False,
                  preserve_emphasis=preserve_emphasis)
     else:  # body
         set_font(run, SHU_SONG, TNR, SIZE["实刊正文"], bold=False,
@@ -407,7 +415,7 @@ def format_paragraph(para: ET.Element, para_type: str,
         set_paragraph_spacing(
             ppr, line_spacing=ABSTRACT_LINE, after="0",
             first_line_indent=ABSTRACT_FIRST_LINE, alignment="both",
-            left=ABSTRACT_LEFT)
+            left=ABSTRACT_LEFT, right=ABSTRACT_RIGHT)
     elif para_type == "body":
         set_paragraph_spacing(ppr, line_spacing=BODY_LINE, after="0",
                               first_line_indent=(None if is_list_item else INDENT_2CHAR),
@@ -453,7 +461,8 @@ def ensure_content_type_override(content_types: ET.Element, part_name: str,
 
 
 def append_text_run(paragraph: ET.Element, text: str,
-                    font: str = SHU_SONG, size: str = SIZE["小五"]) -> ET.Element:
+                    font: str = SHU_SONG,
+                    size: str = SIZE["实刊页眉"]) -> ET.Element:
     run = ET.SubElement(paragraph, W("r"))
     set_font(run, font, TNR, size, bold=False)
     text_node = ET.SubElement(run, W("t"))
@@ -465,22 +474,22 @@ def append_text_run(paragraph: ET.Element, text: str,
 
 def append_page_field(paragraph: ET.Element) -> None:
     begin = ET.SubElement(paragraph, W("r"))
-    set_font(begin, SHU_SONG, TNR, SIZE["小五"])
+    set_font(begin, SHU_SONG, TNR, SIZE["实刊页码"])
     ET.SubElement(begin, W("fldChar")).set(W("fldCharType"), "begin")
 
     instruction = ET.SubElement(paragraph, W("r"))
-    set_font(instruction, SHU_SONG, TNR, SIZE["小五"])
+    set_font(instruction, SHU_SONG, TNR, SIZE["实刊页码"])
     instr_text = ET.SubElement(instruction, W("instrText"))
     instr_text.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
     instr_text.text = " PAGE "
 
     separate = ET.SubElement(paragraph, W("r"))
-    set_font(separate, SHU_SONG, TNR, SIZE["小五"])
+    set_font(separate, SHU_SONG, TNR, SIZE["实刊页码"])
     ET.SubElement(separate, W("fldChar")).set(W("fldCharType"), "separate")
-    append_text_run(paragraph, "1")
+    append_text_run(paragraph, "1", SHU_SONG, SIZE["实刊页码"])
 
     end = ET.SubElement(paragraph, W("r"))
-    set_font(end, SHU_SONG, TNR, SIZE["小五"])
+    set_font(end, SHU_SONG, TNR, SIZE["实刊页码"])
     ET.SubElement(end, W("fldChar")).set(W("fldCharType"), "end")
 
 
@@ -491,8 +500,9 @@ def make_header(text: str, alignment: str) -> ET.ElementTree:
     set_paragraph_spacing(
         ppr, line_spacing="240", after="0", before="0",
         first_line_indent="0", alignment=alignment)
+    set_paragraph_border(ppr, ["bottom"], size="6", space="12")
     if text:
-        append_text_run(paragraph, text, SHU_SONG, SIZE["小五"])
+        append_text_run(paragraph, text, FANG_SONG, SIZE["实刊页眉"])
     return ET.ElementTree(root)
 
 
@@ -530,10 +540,10 @@ def create_header_footer_parts(tmp_path: Path, article_title: str) -> dict[str, 
     ET.register_namespace("", PKG_REL_NS)
     rels_tree.write(str(rels_path), encoding="utf-8", xml_declaration=True)
 
-    make_header(article_title, "right").write(
+    make_header(article_title, "center").write(
         str(tmp_path / "word" / "header1.xml"),
         encoding="utf-8", xml_declaration=True)
-    make_header("中国法学 2026 年第 3 期", "right").write(
+    make_header("中国法学 2026 年第3期", "center").write(
         str(tmp_path / "word" / "header2.xml"),
         encoding="utf-8", xml_declaration=True)
     make_header("", "right").write(
@@ -622,6 +632,11 @@ def configure_settings(settings_root: ET.Element) -> None:
     insert_before(
         settings_root, ET.Element(W("evenAndOddHeaders")),
         W("characterSpacingControl"))
+    for old in settings_root.findall(W("mirrorMargins")):
+        settings_root.remove(old)
+    insert_before(
+        settings_root, ET.Element(W("mirrorMargins")),
+        W("characterSpacingControl"))
 
 
 
@@ -695,7 +710,7 @@ def format_docx(input_path: str, output_path: str, add_toc: bool = False) -> int
         configure_settings(st_root)
         st_tree.write(str(settings_path), encoding="utf-8", xml_declaration=True)
 
-        # 同时处理脚注字体（小五 宋体）
+        # 同时处理脚注字体。PDF 实测脚注为方正书宋约 7.8pt，固定 12pt 行距。
         fn_path = tmp_path / "word" / "footnotes.xml"
         if fn_path.exists():
             fn_tree = ET.parse(str(fn_path))
@@ -706,7 +721,7 @@ def format_docx(input_path: str, output_path: str, add_toc: bool = False) -> int
                     continue
                 rpr = get_or_create_rpr(run)
                 clear_run_formatting(rpr, preserve_emphasis=True)
-                set_font(run, SONG_TI, TNR, SIZE["小五"], bold=False)
+                set_font(run, SHU_SONG, TNR, SIZE["实刊脚注"], bold=False)
             # 脚注段落间距：段前段后0磅
             for p in fn_root.iter(W("p")):
                 ppr = p.find(W("pPr"))
@@ -721,7 +736,7 @@ def format_docx(input_path: str, output_path: str, add_toc: bool = False) -> int
                 sp.set(W("line"), FOOTNOTE_LINE)
                 sp.set(W("lineRule"), "exact")
             fn_tree.write(str(fn_path), encoding="utf-8", xml_declaration=True)
-            print(f"   脚注字体已统一为宋体小五")
+            print(f"   脚注字体已统一为方正书宋 8pt")
 
         # 重新打包
         with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zf:

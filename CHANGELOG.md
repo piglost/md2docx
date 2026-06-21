@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.1 - 2026-06-21
+
+- Refine《中国法学》formatting against the measured PDF layout of《深度伪造技术全链式刑事治理模式研究》:
+  - set body text to Fangzheng Shusong at the closest Word size for the measured 10.8pt and fixed 16.5pt line spacing,
+  - use mirrored margins, measured first-line indent, and measured abstract side indents,
+  - update first-level headings to Heiti 14pt and second-level headings to Heiti 10.8pt,
+  - use Fangzheng Fangsong page headers with a 0.75pt header rule,
+  - use Fangzheng Shusong footnotes at the closest Word size for the measured 7.8pt and fixed 12pt line spacing.
+- Update README and skill instructions with the new measured《中国法学》parameters.
+- Add regression assertions for the measured page geometry, header typography, body spacing, abstract indents, heading sizes, and footnote typography.
+
 ## v0.2.0 - 2026-06-17
 
 - Add regression tests for citation preprocessing, DOCX structure, footnotes, and journal-specific formatting.

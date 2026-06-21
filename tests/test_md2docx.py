@@ -225,10 +225,11 @@ class DocxStructureTests(unittest.TestCase):
             self.assertEqual(page_size.get(W("w")), "10828")
             self.assertEqual(page_size.get(W("h")), "15080")
             self.assertEqual(margins.get(W("left")), "1304")
-            self.assertEqual(margins.get(W("right")), "1304")
+            self.assertEqual(margins.get(W("right")), "1361")
 
             settings = read_xml(output, "word/settings.xml")
             self.assertIsNotNone(settings.find(W("evenAndOddHeaders")))
+            self.assertIsNotNone(settings.find(W("mirrorMargins")))
 
             with zipfile.ZipFile(output) as archive:
                 self.assertIn("word/header1.xml", archive.namelist())
@@ -242,6 +243,22 @@ class DocxStructureTests(unittest.TestCase):
                 self.assertIn(
                     "中国法学",
                     "".join(node.text or "" for node in even_header.iter(W("t"))),
+                )
+                header_border = odd_header.find(
+                    f".//{W('pPr')}/{W('pBdr')}/{W('bottom')}")
+                self.assertIsNotNone(header_border)
+                self.assertEqual(header_border.get(W("sz")), "6")
+                odd_header_run = run_for_text(
+                    next(odd_header.iter(W("p"))),
+                    "《生态环境法典》的概念体系置换与话语体系建构",
+                )
+                self.assertEqual(
+                    odd_header_run.find(f"{W('rPr')}/{W('rFonts')}").get(W("eastAsia")),
+                    "方正仿宋简体",
+                )
+                self.assertEqual(
+                    odd_header_run.find(f"{W('rPr')}/{W('sz')}").get(W("val")),
+                    "19",
                 )
                 self.assertIn(b"PAGE", archive.read("word/footer1.xml"))
                 self.assertNotIn(b"ns0:Relationships", archive.read("word/_rels/document.xml.rels"))
@@ -291,16 +308,25 @@ class DocxStructureTests(unittest.TestCase):
             self.assertEqual(abstract_spacing.get(W("line")), "360")
             self.assertEqual(abstract_spacing.get(W("lineRule")), "exact")
             abstract_indent = abstract.find(f"{W('pPr')}/{W('ind')}")
-            self.assertEqual(abstract_indent.get(W("left")), "510")
+            self.assertEqual(abstract_indent.get(W("left")), "454")
+            self.assertEqual(abstract_indent.get(W("right")), "510")
             self.assertEqual(abstract_indent.get(W("firstLine")), "454")
 
             body, fonts, size, _, body_spacing = style_for("正文第一段")
             self.assertEqual(fonts.get(W("eastAsia")), "方正书宋简体")
-            self.assertEqual(size.get(W("val")), "21")
-            self.assertEqual(body_spacing.get(W("line")), "300")
+            self.assertEqual(size.get(W("val")), "22")
+            self.assertEqual(body_spacing.get(W("line")), "330")
             self.assertEqual(body_spacing.get(W("lineRule")), "exact")
             self.assertEqual(
                 body.find(f"{W('pPr')}/{W('ind')}").get(W("firstLine")), "454")
+
+            h1 = paragraph_for_text(root, "一、一级标题")
+            h1_run = run_for_text(h1, "一、一级标题")
+            self.assertEqual(
+                h1_run.find(f"{W('rPr')}/{W('rFonts')}").get(W("eastAsia")),
+                "黑体",
+            )
+            self.assertEqual(h1_run.find(f"{W('rPr')}/{W('sz')}").get(W("val")), "28")
         finally:
             holder.cleanup()
 
@@ -528,6 +554,20 @@ class DocxStructureTests(unittest.TestCase):
                             self.assertIsNotNone(spacing)
                             self.assertEqual(spacing.get(W("before")), "0")
                             self.assertEqual(spacing.get(W("after")), "0")
+                            if style == "faxue":
+                                self.assertEqual(spacing.get(W("line")), "240")
+                                text_runs = [
+                                    run for run in paragraph.iter(W("r"))
+                                    if run.find(W("footnoteRef")) is None
+                                    and "".join(t.text or "" for t in run.iter(W("t"))).strip()
+                                ]
+                                self.assertTrue(text_runs)
+                                rpr = text_runs[0].find(W("rPr"))
+                                self.assertEqual(
+                                    rpr.find(W("rFonts")).get(W("eastAsia")),
+                                    "方正书宋简体",
+                                )
+                                self.assertEqual(rpr.find(W("sz")).get(W("val")), "16")
                 finally:
                     holder.cleanup()
 
